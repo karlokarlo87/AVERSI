@@ -35,14 +35,8 @@ async function delay(ms) {
 // Helper function to clean text (removes multiple spaces, tabs, newlines)
 function cleanText(text) {
     if (!text) return '';
-    return text
-        .replace(/\r\n/g, ' ')     // Replace Windows newlines
-        .replace(/\n/g, ' ')        // Replace Unix newlines
-        .replace(/\r/g, ' ')        // Replace old Mac newlines
-        .replace(/\t/g, ' ')        // Replace tabs with space
-        .replace(/\s+/g, ' ')       // Replace multiple spaces with single space
-        .replace(/\s+#/g, ' #')     // Fix spacing before #
-        .replace(/^\s+|\s+$/g, ''); // Trim start and end
+    return text.replace(/\s+/g, " ").trim();
+       
 }
 
 // Download HTML with Puppeteer
@@ -109,7 +103,7 @@ function parseHTMLFile(filename, category, pageNum) {
             
             // Get old price
             const priceOldRaw = $el.find('.ty-list-price:last-child').text() || '';
-            const priceOld = cleanText(priceOldRaw);
+            const priceOld = cleanText(priceOldRaw).replace("₾", "").trim();;
             
             // Get current price
             const priceRaw = $el.find('.ty-price-num').text() || '';
@@ -122,8 +116,8 @@ function parseHTMLFile(filename, category, pageNum) {
                 productCode: cleanText(productCode),
                 title: title,
                 category: category,
-                price: price.replace('ლ', '').replace('₾', '').replace(',', '.').trim(),
-                priceOld: priceOld.replace('₾', '').replace(',', '.').trim(),
+                price: price,
+                priceOld: priceOld,
                 pageNum: pageNum,
             };
             
