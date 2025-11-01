@@ -1,16 +1,53 @@
-// Two-step scraper: Download with Puppeteer, Parse with Cheerio
+const express = require('express');
+const path = require('path');
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const fs = require('fs');
 const XLSX = require('xlsx');
 
+const app = express();
+const PORT = 3000;
+
+// Serve static files
+app.use(express.static('public'));
+app.use(express.json());
+
+// Store scraping status
+let scrapingStatus = {
+    isRunning: false,
+    progress: 0,
+    totalPages: 0,
+    currentPage: 0,
+    currentCategory: '',
+    productsFound: 0,
+    medicationProducts: 0,
+    careProducts: 0,
+    message: 'Ready to start',
+    startTime: null,
+    endTime: null
+};
+
+// Helper function for delay
 async function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Step 1: Download HTML files with Puppeteer
-async function downloadPageHTML(browser, pageNum) {
-    const url = `https://shop.aversi.ge/ka/medication/page-${pageNum}/?items_per_page=192`;
+// Helper function to clean text (removes multiple spaces, tabs, newlines)
+function cleanText(text) {
+    if (!text) return '';
+    return text
+        .replace(/\r\n/g, ' ')     // Replace Windows newlines
+        .replace(/\n/g, ' ')        // Replace Unix newlines
+        .replace(/\r/g, ' ')        // Replace old Mac newlines
+        .replace(/\t/g, ' ')        // Replace tabs with space
+        .replace(/\s+/g, ' ')       // Replace multiple spaces with single space
+        .replace(/\s+#/g, ' #')     // Fix spacing before #
+        .replace(/^\s+|\s+$/g, ''); // Trim start and end
+}
+
+// Download HTML with Puppeteer
+async function downloadPageHTML(browser, category, pageNum) {
+    const url = `https://shop.aversi.ge/ka/${category}/page-${pageNum}/?items_per_page=192`;
     let page;
     
     try {
@@ -19,7 +56,8 @@ async function downloadPageHTML(browser, pageNum) {
         await page.setViewport({ width: 1920, height: 1080 });
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         
-        console.log(`Downloading page ${pageNum}...`);
+        console.log(`Downloading ${category} page ${pageNum}...`);
+        scrapingStatus.message = `Downloading ${category} page ${pageNum}...`;
         
         await page.goto(url, {
             waitUntil: 'networkidle2',
@@ -31,13 +69,15 @@ async function downloadPageHTML(browser, pageNum) {
         // Get HTML content
         const html = await page.content();
         
-        // Save HTML file
-        const filename = `page_${pageNum}.html`;
+        // Save HTML file to temp directory
+        const tempDir = path.join(__dirname, 'temp');
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir);
+        }
+        
+        const filename = path.join(tempDir, `page_${pageNum}.html`);
         fs.writeFileSync(filename, html);
         console.log(`✓ Saved: ${filename} (${Math.round(html.length / 1024)} KB)`);
-        
-        // Take screenshot
-        await page.screenshot({ path: `screenshot_page_${pageNum}.png` });
         
         await page.close();
         return filename;
@@ -49,10 +89,10 @@ async function downloadPageHTML(browser, pageNum) {
     }
 }
 
-// Step 2: Parse HTML file with Cheerio
-function parseHTMLFile(filename, pageNum) {
+// Parse HTML file with Cheerio
+function parseHTMLFile(filename, category, pageNum) {
     try {
-        console.log(`Parsing ${filename}...`);
+        console.log(`Parsing ${path.basename(filename)}...`);
         
         const html = fs.readFileSync(filename, 'utf-8');
         const $ = cheerio.load(html);
@@ -63,30 +103,43 @@ function parseHTMLFile(filename, pageNum) {
         $('.col-tile').each((index, element) => {
             const $el = $(element);
             
-            // Get title
-            const title = $el.find('.product-title').text().trim() || '';
+            // Get title and clean it up
+            const titleRaw = $el.find('.product-title').text() || '';
+            const title = cleanText(titleRaw);
             
             // Get old price
-            const priceOld = $el.find('.ty-list-price:last-child').text().trim() || '';
+            const priceOldRaw = $el.find('.ty-list-price:last-child').text() || '';
+            const priceOld = cleanText(priceOldRaw);
             
             // Get current price
-            let price = $el.find('.ty-price-num').text().trim();
+            const priceRaw = $el.find('.ty-price-num').text() || '';
+            const price = cleanText(priceRaw);
         
             // Get product code
             const productCode = $el.find('input[name$="[product_code]"]').val() || ''; 
        
             const product = {
-                pageNum: pageNum,
+                productCode: cleanText(productCode),
                 title: title,
+                category: category,
                 price: price.replace('ლ', '').replace('₾', '').replace(',', '.').trim(),
-                priceOld: priceOld.replace('ლ', '').replace('₾', '').replace(',', '.').trim(),
-                productCode: productCode,
+                priceOld: priceOld.replace('₾', '').replace(',', '.').trim(),
+                pageNum: pageNum,
             };
             
             products.push(product);
         });
         
-        console.log(`✓ Parsed ${products.length} products from ${filename}`);
+        console.log(`✓ Parsed ${products.length} products from ${path.basename(filename)}`);
+        
+        // Update category-specific counters
+        if (category === 'medication') {
+            scrapingStatus.medicationProducts += products.length;
+        } else if (category === 'care-products') {
+            scrapingStatus.careProducts += products.length;
+        }
+        
+        scrapingStatus.productsFound += products.length;
         return products;
         
     } catch (error) {
@@ -95,192 +148,276 @@ function parseHTMLFile(filename, pageNum) {
     }
 }
 
-// Main scraping function
-async function scrapeAllPages(startPage = 1, endPage = 32) {
-    console.log('╔═══════════════════════════════════════════════════════════╗');
-    console.log('║    STEP 1: Downloading HTML files with Puppeteer         ║');
-    console.log('╚═══════════════════════════════════════════════════════════╝\n');
+// Main scraping function for multiple categories
+async function scrapeAllCategories(categories) {
+    scrapingStatus.isRunning = true;
+    scrapingStatus.startTime = Date.now();
+    scrapingStatus.currentPage = 0;
+    scrapingStatus.productsFound = 0;
+    scrapingStatus.medicationProducts = 0;
+    scrapingStatus.careProducts = 0;
+    
+    // Calculate total pages
+    let totalPagesToScrape = 0;
+    categories.forEach(cat => {
+        totalPagesToScrape += cat.pages;
+    });
+    scrapingStatus.totalPages = totalPagesToScrape;
     
     const browser = await puppeteer.launch({
         headless: 'new',
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
     
-    const htmlFiles = [];
+    const allProducts = [];
+    let successfulPages = 0;
+    let failedPages = [];
+    let pagesProcessed = 0;
     
-    // Download all HTML files
-    for (let page = startPage; page <= endPage; page++) {
-        console.log(`\n[${page}/${endPage}] Downloading page ${page}...`);
+    // Process each category
+    for (const categoryConfig of categories) {
+        const { category, startPage, endPage, pages } = categoryConfig;
         
-        const filename = await downloadPageHTML(browser, page);
+        console.log(`\n╔═══════════════════════════════════════════════════════════╗`);
+        console.log(`║  Scraping Category: ${category.toUpperCase().padEnd(38)} ║`);
+        console.log(`╚═══════════════════════════════════════════════════════════╝\n`);
         
-        if (filename) {
-            htmlFiles.push({ page, filename });
-        }
+        scrapingStatus.currentCategory = category;
         
-        // Delay between requests
-        if (page < endPage) {
-            console.log(`Waiting 3 seconds...`);
-            await delay(3000);
+        // Scrape pages for this category
+        for (let page = startPage; page <= endPage; page++) {
+            pagesProcessed++;
+            scrapingStatus.currentPage = pagesProcessed;
+            scrapingStatus.progress = Math.round((pagesProcessed / totalPagesToScrape) * 100);
+            
+            console.log(`\n[${pagesProcessed}/${totalPagesToScrape}] Processing ${category} page ${page}...`);
+            
+            const filename = await downloadPageHTML(browser, category, page);
+            
+            if (filename) {
+                scrapingStatus.message = `Parsing ${category} page ${page}...`;
+                const products = parseHTMLFile(filename, category, page);
+                
+                if (products && products.length > 0) {
+                    allProducts.push(...products);
+                    successfulPages++;
+                    console.log(`✓ Total so far: ${allProducts.length} products from ${successfulPages} pages`);
+                } else {
+                    console.log(`✗ No products found on ${category} page ${page}`);
+                    failedPages.push(`${category}-${page}`);
+                }
+                
+                // Clean up temp file
+                fs.unlinkSync(filename);
+            } else {
+                failedPages.push(`${category}-${page}`);
+            }
+            
+            // Delay between requests
+            if (pagesProcessed < totalPagesToScrape) {
+                console.log(`Waiting 3 seconds...`);
+                await delay(3000);
+            }
         }
     }
     
     await browser.close();
-    console.log('\n✓ All HTML files downloaded!');
     
-    // Parse all HTML files
-    console.log('\n╔═══════════════════════════════════════════════════════════╗');
-    console.log('║    STEP 2: Parsing HTML files with Cheerio               ║');
-    console.log('╚═══════════════════════════════════════════════════════════╝\n');
+    scrapingStatus.endTime = Date.now();
+    scrapingStatus.isRunning = false;
+    scrapingStatus.progress = 100;
     
-    const allProducts = [];
-    let successfulPages = 0;
-    let failedPages = [];
-    
-    for (const { page, filename } of htmlFiles) {
-        console.log(`\n[${page}/${endPage}] Parsing page ${page}...`);
-        
-        const products = parseHTMLFile(filename, page);
-        
-        if (products && products.length > 0) {
-            allProducts.push(...products);
-            successfulPages++;
-            console.log(`✓ Total so far: ${allProducts.length} products from ${successfulPages} pages`);
-        } else {
-            console.log(`✗ No products found on page ${page}`);
-            failedPages.push(page);
-        }
-    }
-    
-    return { allProducts, successfulPages, failedPages, totalPages: htmlFiles.length };
+    return { allProducts, successfulPages, failedPages, totalPages: totalPagesToScrape };
 }
 
-// Main execution
-(async () => {
-    const startTime = Date.now();
+// Routes
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// GET /aversi - Main scraping endpoint
+app.get('/aversi', async (req, res) => {
+    if (scrapingStatus.isRunning) {
+        return res.status(400).json({
+            error: 'Scraping is already in progress',
+            status: scrapingStatus
+        });
+    }
     
-    console.log('╔═══════════════════════════════════════════════════════════╗');
-    console.log('║         Aversi Pharmacy Scraper - 2-Step Version         ║');
-    console.log('║    Step 1: Download HTML | Step 2: Parse with Cheerio    ║');
-    console.log('╚═══════════════════════════════════════════════════════════╝\n');
-    
-    const { allProducts, successfulPages, failedPages, totalPages } = await scrapeAllPages(1, 32);
-    
-    const endTime = Date.now();
-    const duration = ((endTime - startTime) / 1000 / 60).toFixed(2);
-    
-    console.log('\n' + '='.repeat(60));
-    console.log('SCRAPING COMPLETE!');
-    console.log('='.repeat(60));
-    console.log(`Total products: ${allProducts.length}`);
-    console.log(`Pages downloaded: ${totalPages}`);
-    console.log(`Pages with products: ${successfulPages}`);
-    console.log(`Failed pages: ${failedPages.length > 0 ? failedPages.join(', ') : 'None'}`);
-    console.log(`Duration: ${duration} minutes`);
-    console.log('='.repeat(60));
-    
-    if (allProducts.length > 0) {
-        // Save JSON (single file only)
-        fs.writeFileSync('aversi_all_products.json', JSON.stringify(allProducts, null, 2));
-        console.log('\n✓ Saved: aversi_all_products.json');
-        
-        // Create Excel file
-        console.log('\nCreating Excel file...');
-        const worksheet = XLSX.utils.json_to_sheet(allProducts);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Products');
-        
-        // Auto-size columns
-        const maxWidth = 50;
-        const wscols = [
-            { wch: 10 },  // pageNum
-            { wch: maxWidth },  // title
-            { wch: 10 },  // price
-            { wch: 10 },  // priceOld
-            { wch: 15 },  // productCode
+    try {
+        // Configure categories to scrape
+        const categories = [
+            { category: 'medication', startPage: 1, endPage: 32, pages: 32 },
+            { category: 'care-products', startPage: 1, endPage: 17, pages: 17 }
         ];
-        worksheet['!cols'] = wscols;
         
-        XLSX.writeFile(workbook, 'aversi_all_products.xlsx');
-        console.log('✓ Saved: aversi_all_products.xlsx');
-    
-        // Statistics
-        console.log('\n' + '='.repeat(60));
-        console.log('STATISTICS');
-        console.log('='.repeat(60));
-        
-        const withPrice = allProducts.filter(p => p.price).length;
-        const withDiscount = allProducts.filter(p => p.priceOld && p.priceOld !== p.price).length;
-        const withProductCode = allProducts.filter(p => p.productCode).length;
-        const avgPerPage = (allProducts.length / successfulPages).toFixed(1);
-        
-        console.log(`Average per page: ${avgPerPage}`);
-        console.log(`Products with Price: ${withPrice} (${(withPrice/allProducts.length*100).toFixed(1)}%)`);
-        console.log(`Products with Discount: ${withDiscount} (${(withDiscount/allProducts.length*100).toFixed(1)}%)`);
-        console.log(`Products with Code: ${withProductCode} (${(withProductCode/allProducts.length*100).toFixed(1)}%)`);
-        
-        // Products per page breakdown
-        const productsPerPage = {};
-        allProducts.forEach(p => {
-            productsPerPage[p.pageNum] = (productsPerPage[p.pageNum] || 0) + 1;
+        // Start scraping in background
+        res.json({
+            message: 'Scraping started for multiple categories',
+            categories: categories,
+            status: scrapingStatus
         });
         
-        console.log('\nProducts per page (first 15):');
-        Object.entries(productsPerPage)
-            .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
-            .slice(0, 15)
-            .forEach(([page, count]) => {
-                console.log(`  Page ${page}: ${count} products`);
-            });
-        
-        if (Object.keys(productsPerPage).length > 15) {
-            console.log(`  ... and ${Object.keys(productsPerPage).length - 15} more pages`);
-        }
-        
-        // Sample products
-        console.log('\n' + '='.repeat(60));
-        console.log('SAMPLE PRODUCTS');
-        console.log('='.repeat(60));
-        
-        console.log('\nFirst product:');
-        console.log(JSON.stringify(allProducts[0], null, 2));
-        
-        if (allProducts.length > 1) {
-            console.log('\nLast product:');
-            console.log(JSON.stringify(allProducts[allProducts.length - 1], null, 2));
-        }
-        
-        console.log('\n✅ SCRAPING SUCCESSFUL!');
-        console.log('\n📁 Files created:');
-        console.log('  • aversi_all_products.json');
-        console.log('  • aversi_all_products.xlsx');
-        
-        // Cleanup: Delete HTML files and screenshots
-        console.log('\n🧹 Cleaning up temporary files...');
-        let deletedCount = 0;
-        
-        for (let i = 1; i <= 32; i++) {
-            const htmlFile = `page_${i}.html`;
-            const screenshotFile = `screenshot_page_${i}.png`;
+        // Run scraping asynchronously
+        scrapeAllCategories(categories).then(({ allProducts, successfulPages, failedPages, totalPages }) => {
+            const duration = ((scrapingStatus.endTime - scrapingStatus.startTime) / 1000 / 60).toFixed(2);
             
-            if (fs.existsSync(htmlFile)) {
-                fs.unlinkSync(htmlFile);
-                deletedCount++;
+            if (allProducts.length > 0) {
+                // Clean up all products data one more time
+                const cleanedProducts = allProducts.map(product => ({
+                    ...product,
+                    title: cleanText(product.title),
+                    productCode: cleanText(product.productCode),
+                    price: cleanText(product.price),
+                    priceOld: cleanText(product.priceOld)
+                }));
+                
+                // Create data directory if it doesn't exist
+                const dataDir = path.join(__dirname, 'public', 'data');
+                if (!fs.existsSync(dataDir)) {
+                    fs.mkdirSync(dataDir, { recursive: true });
+                }
+                
+                // Save JSON
+                const jsonPath = path.join(dataDir, 'aversi_products.json');
+                fs.writeFileSync(jsonPath, JSON.stringify(cleanedProducts, null, 2));
+                
+                // Create Excel file with multiple sheets
+                const workbook = XLSX.utils.book_new();
+                
+                // Add sheet with all products
+                const allWorksheet = XLSX.utils.json_to_sheet(cleanedProducts);
+                XLSX.utils.book_append_sheet(workbook, allWorksheet, 'All Products');
+                
+                // Add sheet for medications only
+                const medications = cleanedProducts.filter(p => p.category === 'medication');
+                if (medications.length > 0) {
+                    const medWorksheet = XLSX.utils.json_to_sheet(medications);
+                    XLSX.utils.book_append_sheet(workbook, medWorksheet, 'Medications');
+                }
+                
+                // Add sheet for care products only
+                const careProducts = cleanedProducts.filter(p => p.category === 'care-products');
+                if (careProducts.length > 0) {
+                    const careWorksheet = XLSX.utils.json_to_sheet(careProducts);
+                    XLSX.utils.book_append_sheet(workbook, careWorksheet, 'Care Products');
+                }
+                
+                // Auto-size columns for all sheets
+                const wscols = [
+                    { wch: 15 },  // productCode
+                    { wch: 50 },  // title
+                    { wch: 15 },  // category
+                    { wch: 10 },  // price
+                    { wch: 10 },  // priceOld
+                    { wch: 10 },  // pageNum
+                ];
+                allWorksheet['!cols'] = wscols;
+                if (medications.length > 0) medWorksheet['!cols'] = wscols;
+                if (careProducts.length > 0) careWorksheet['!cols'] = wscols;
+                
+                const xlsxPath = path.join(dataDir, 'aversi_products.xlsx');
+                XLSX.writeFile(workbook, xlsxPath);
+                
+                // Calculate statistics using cleaned data
+                const withPrice = cleanedProducts.filter(p => p.price).length;
+                const withDiscount = cleanedProducts.filter(p => p.priceOld && p.priceOld !== p.price).length;
+                const withProductCode = cleanedProducts.filter(p => p.productCode).length;
+                
+                scrapingStatus.message = `Completed! Scraped ${cleanedProducts.length} products in ${duration} minutes`;
+                scrapingStatus.statistics = {
+                    totalProducts: cleanedProducts.length,
+                    medicationProducts: scrapingStatus.medicationProducts,
+                    careProducts: scrapingStatus.careProducts,
+                    pagesScraped: successfulPages,
+                    failedPages: failedPages.length,
+                    duration: duration,
+                    withPrice: withPrice,
+                    withDiscount: withDiscount,
+                    withProductCode: withProductCode
+                };
+            } else {
+                scrapingStatus.message = 'No products were scraped';
             }
-            
-            if (fs.existsSync(screenshotFile)) {
-                fs.unlinkSync(screenshotFile);
-                deletedCount++;
-            }
-        }
+        }).catch(error => {
+            console.error('Scraping error:', error);
+            scrapingStatus.isRunning = false;
+            scrapingStatus.message = `Error: ${error.message}`;
+        });
         
-        console.log(`✓ Deleted ${deletedCount} temporary files (HTML pages and screenshots)`);
-        
-    } else {
-        console.log('\n❌ No products were scraped.');
-        console.log('\nTroubleshooting:');
-        console.log('1. Check page_1.html - open it in a browser');
-        console.log('2. Look for elements with class="col-tile"');
-        console.log('3. The HTML structure might be different');
+    } catch (error) {
+        console.error('Error starting scraper:', error);
+        res.status(500).json({ 
+            error: 'Failed to start scraping',
+            details: error.message 
+        });
     }
-})();
+});
+
+// Status endpoint
+app.get('/aversi/status', (req, res) => {
+    res.json(scrapingStatus);
+});
+
+// Get scraped data
+app.get('/aversi/data', (req, res) => {
+    const jsonPath = path.join(__dirname, 'public', 'data', 'aversi_products.json');
+    
+    if (fs.existsSync(jsonPath)) {
+        const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+        res.json({
+            success: true,
+            count: data.length,
+            products: data.slice(0, 100), // Return first 100 products
+            message: `Showing first 100 of ${data.length} products`
+        });
+    } else {
+        res.status(404).json({
+            success: false,
+            message: 'No data available. Please run the scraper first.'
+        });
+    }
+});
+
+// Download endpoints
+app.get('/aversi/download/json', (req, res) => {
+    const filePath = path.join(__dirname, 'public', 'data', 'aversi_products.json');
+    if (fs.existsSync(filePath)) {
+        res.download(filePath);
+    } else {
+        res.status(404).json({ error: 'File not found' });
+    }
+});
+
+app.get('/aversi/download/excel', (req, res) => {
+    const filePath = path.join(__dirname, 'public', 'data', 'aversi_products.xlsx');
+    if (fs.existsSync(filePath)) {
+        res.download(filePath);
+    } else {
+        res.status(404).json({ error: 'File not found' });
+    }
+});
+
+// Clean temp directory on startup
+const tempDir = path.join(__dirname, 'temp');
+if (fs.existsSync(tempDir)) {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+}
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`
+╔═══════════════════════════════════════════════════════════╗
+║         Aversi Pharmacy Scraper Web Service              ║
+║                                                           ║
+║  Server running at: http://localhost:${PORT}                 ║
+║                                                           ║
+║  API Endpoints:                                           ║
+║  GET  /aversi         - Start scraping                   ║
+║  GET  /aversi/status  - Check scraping status            ║
+║  GET  /aversi/data    - Get scraped data                 ║
+║  GET  /aversi/download/json  - Download JSON file        ║
+║  GET  /aversi/download/excel - Download Excel file       ║
+╚═══════════════════════════════════════════════════════════╝
+    `);
+});

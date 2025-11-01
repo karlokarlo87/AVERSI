@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aversi Pharmacy Scraper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .control-panel {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .status-panel {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 10px;
+        }
+
+        .status-header {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .progress-container {
+            background: #e5e7eb;
+            border-radius: 10px;
+            height: 30px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .status-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .status-item {
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .status-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .data-section {
+            margin-top: 30px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .data-table th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .data-table tr:hover {
+            background: #f9fafb;
+        }
+
+        .price {
+            font-weight: 600;
+            color: #10b981;
+        }
+
+        .old-price {
+            text-decoration: line-through;
+            color: #999;
+            margin-right: 10px;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e5e7eb;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .message-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+        }
+
+        .message-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+
+        .download-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 Aversi Pharmacy Scraper</h1>
+            <p>Web scraping tool for aversi.ge medication catalog</p>
+        </div>
+
+        <div class="main-card">
+            <div class="control-panel">
+                <button id="startBtn" class="btn btn-primary" onclick="startScraping()">
+                    Start Scraping
+                </button>
+                <button class="btn btn-secondary" onclick="checkStatus()">
+                    Check Status
+                </button>
+                <button class="btn btn-secondary" onclick="loadData()">
+                    Load Data
+                </button>
+            </div>
+
+            <div id="statusPanel" class="status-panel hidden">
+                <div class="status-header">
+                    Scraping Status
+                    <span id="spinner" class="loading-spinner hidden"></span>
+                </div>
+                
+                <div class="progress-container">
+                    <div id="progressBar" class="progress-bar" style="width: 0%">
+                        <span id="progressText">0%</span>
+                    </div>
+                </div>
+
+                <div class="status-info">
+                    <div class="status-item">
+                        <div class="status-label">Current Page</div>
+                        <div class="status-value" id="currentPage">0 / 32</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">Products Found</div>
+                        <div class="status-value" id="productsFound">0</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">Status</div>
+                        <div class="status-value" id="statusMessage">Ready</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="messageBox"></div>
+
+            <div id="statisticsPanel" class="hidden">
+                <h2 style="margin-top: 30px; margin-bottom: 20px;">📊 Statistics</h2>
+                <div class="stats-grid" id="statsGrid"></div>
+                
+                <div class="download-buttons">
+                    <a href="/aversi/download/json" class="btn btn-success">
+                        📥 Download JSON
+                    </a>
+                    <a href="/aversi/download/excel" class="btn btn-success">
+                        📥 Download Excel
+                    </a>
+                </div>
+            </div>
+
+            <div id="dataSection" class="data-section hidden">
+                <h2>📦 Product Data (Sample)</h2>
+                <table class="data-table" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Product Name</th>
+                            <th>Price</th>
+                            <th>Page</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let statusInterval;
+
+        function showMessage(message, type = 'success') {
+            const messageBox = document.getElementById('messageBox');
+            messageBox.className = `message message-${type}`;
+            messageBox.textContent = message;
+            messageBox.style.display = 'block';
+            
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 5000);
+        }
+
+        async function startScraping() {
+            const startBtn = document.getElementById('startBtn');
+            startBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/aversi');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage('Scraping started successfully!');
+                    document.getElementById('statusPanel').classList.remove('hidden');
+                    document.getElementById('spinner').classList.remove('hidden');
+                    
+                    // Start polling for status
+                    statusInterval = setInterval(updateStatus, 2000);
+                    updateStatus();
+                } else {
+                    showMessage(data.error || 'Failed to start scraping', 'error');
+                    startBtn.disabled = false;
+                }
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+                startBtn.disabled = false;
+            }
+        }
+
+        async function checkStatus() {
+            document.getElementById('statusPanel').classList.remove('hidden');
+            await updateStatus();
+        }
+
+        async function updateStatus() {
+            try {
+                const response = await fetch('/aversi/status');
+                const status = await response.json();
+                
+                // Update progress bar
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('progressText');
+                progressBar.style.width = status.progress + '%';
+                progressText.textContent = status.progress + '%';
+                
+                // Update status info
+                document.getElementById('currentPage').textContent = 
+                    `${status.currentPage} / ${status.totalPages}`;
+                document.getElementById('productsFound').textContent = status.productsFound;
+                document.getElementById('statusMessage').textContent = status.message;
+                
+                // Check if completed
+                if (!status.isRunning && status.progress === 100) {
+                    clearInterval(statusInterval);
+                    document.getElementById('spinner').classList.add('hidden');
+                    document.getElementById('startBtn').disabled = false;
+                    
+                    if (status.statistics) {
+                        showStatistics(status.statistics);
+                    }
+                    
+                    showMessage('Scraping completed successfully!');
+                    loadData();
+                } else if (!status.isRunning) {
+                    clearInterval(statusInterval);
+                    document.getElementById('spinner').classList.add('hidden');
+                    document.getElementById('startBtn').disabled = false;
+                }
+            } catch (error) {
+                console.error('Status update error:', error);
+            }
+        }
+
+        function showStatistics(stats) {
+            const statsPanel = document.getElementById('statisticsPanel');
+            const statsGrid = document.getElementById('statsGrid');
+            
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${stats.totalProducts}</div>
+                    <div class="stat-label">Total Products</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.pagesScraped}</div>
+                    <div class="stat-label">Pages Scraped</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.withPrice}</div>
+                    <div class="stat-label">With Price</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.withDiscount}</div>
+                    <div class="stat-label">On Sale</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.duration}m</div>
+                    <div class="stat-label">Duration</div>
+                </div>
+            `;
+            
+            statsPanel.classList.remove('hidden');
+        }
+
+        async function loadData() {
+            try {
+                const response = await fetch('/aversi/data');
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayData(data.products);
+                    showMessage(data.message);
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('Error loading data: ' + error.message, 'error');
+            }
+        }
+
+        function displayData(products) {
+            const dataSection = document.getElementById('dataSection');
+            const dataBody = document.getElementById('dataBody');
+            
+            dataBody.innerHTML = products.map(product => `
+                <tr>
+                    <td>${product.productCode || 'N/A'}</td>
+                    <td>${product.title}</td>
+                    <td>
+                        ${product.priceOld ? `<span class="old-price">₾${product.priceOld}</span>` : ''}
+                        <span class="price">₾${product.price || 'N/A'}</span>
+                    </td>
+                    <td>Page ${product.pageNum}</td>
+                </tr>
+            `).join('');
+            
+            dataSection.classList.remove('hidden');
+        }
+
+        // Check initial status on page load
+        window.addEventListener('load', () => {
+            checkStatus();
+        });
+    </script>
+</body>
+</html>
