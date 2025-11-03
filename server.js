@@ -242,7 +242,7 @@ app.get('/aversi', async (req, res) => {
         // Configure categories to scrape
         const categories = [
             { category: 'medication', startPage: 1, endPage: 32, pages: 32 },
-            { category: 'care-products', startPage: 1, endPage: 17, pages: 17 }
+            { category: 'care-products', startPage: 1, endPage: 70, pages: 70 }
         ];
         
         // Start scraping in background
@@ -285,17 +285,17 @@ app.get('/aversi', async (req, res) => {
                 
                 // Add sheet for medications only
                 const medications = cleanedProducts.filter(p => p.category === 'medication');
-                if (medications.length > 0) {
+               // if (medications.length > 0) {
                     const medWorksheet = XLSX.utils.json_to_sheet(medications);
                     XLSX.utils.book_append_sheet(workbook, medWorksheet, 'Medications');
-                }
+               // }
                 
                 // Add sheet for care products only
                 const careProducts = cleanedProducts.filter(p => p.category === 'care-products');
-                if (careProducts.length > 0) {
+                //if (careProducts.length > 0) {
                     const careWorksheet = XLSX.utils.json_to_sheet(careProducts);
                     XLSX.utils.book_append_sheet(workbook, careWorksheet, 'Care Products');
-                }
+               // }
                 
                 // Auto-size columns for all sheets
                 const wscols = [
