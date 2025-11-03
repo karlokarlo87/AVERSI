@@ -35,8 +35,49 @@ async function delay(ms) {
 // Helper function to clean text (removes multiple spaces, tabs, newlines)
 function cleanText(text) {
     if (!text) return '';
-    return text.replace(/\s+/g, " ").trim();
-       
+    return text
+        .replace(/\r\n/g, ' ')     // Replace Windows newlines
+        .replace(/\n/g, ' ')        // Replace Unix newlines
+        .replace(/\r/g, ' ')        // Replace old Mac newlines
+        .replace(/\t/g, ' ')        // Replace tabs with space
+        .replace(/\s+/g, ' ')       // Replace multiple spaces with single space
+        .replace(/\s+#/g, ' #')     // Fix spacing before #
+        .replace(/^\s+|\s+$/g, ''); // Trim start and end
+}
+
+// Helper function to clean and format prices
+function cleanPrice(priceText) {
+    if (!priceText) return '';
+    
+    // First clean the text
+    let price = cleanText(priceText);
+    
+    // Remove currency symbols
+    price = price.replace(/₾/g, '').replace(/ლ/g, '');
+    
+    // Determine if comma is thousands separator or decimal separator
+    // If we have both comma and dot, comma is thousands separator
+    // If we only have comma with 2 digits after, it's decimal separator
+    if (price.includes(',') && price.includes('.')) {
+        // Comma is thousands separator, remove it
+        price = price.replace(/,/g, '');
+    } else if (price.match(/,\d{2}$/)) {
+        // Comma is decimal separator (e.g., "15,90")
+        price = price.replace(',', '.');
+    } else {
+        // Remove any other commas (thousands separators)
+        price = price.replace(/,/g, '');
+    }
+    
+    // Trim any remaining spaces
+    price = price.trim();
+    
+    // Remove .00 at the end to get whole numbers
+    if (price.endsWith('.00')) {
+        price = price.slice(0, -3);
+    }
+    
+    return price;
 }
 
 // Download HTML with Puppeteer
@@ -103,11 +144,11 @@ function parseHTMLFile(filename, category, pageNum) {
             
             // Get old price
             const priceOldRaw = $el.find('.ty-list-price:last-child').text() || '';
-            const priceOld = cleanText(priceOldRaw).replace("₾", "").trim();;
+            const priceOld = cleanPrice(priceOldRaw);
             
             // Get current price
             const priceRaw = $el.find('.ty-price-num').text() || '';
-            const price = cleanText(priceRaw);
+            const price = cleanPrice(priceRaw);
         
             // Get product code
             const productCode = $el.find('input[name$="[product_code]"]').val() || ''; 
@@ -262,8 +303,8 @@ app.get('/aversi', async (req, res) => {
                     ...product,
                     title: cleanText(product.title),
                     productCode: cleanText(product.productCode),
-                    price: cleanText(product.price),
-                    priceOld: cleanText(product.priceOld)
+                    price: cleanPrice(product.price),
+                    priceOld: cleanPrice(product.priceOld)
                 }));
                 
                 // Create data directory if it doesn't exist
@@ -285,17 +326,17 @@ app.get('/aversi', async (req, res) => {
                 
                 // Add sheet for medications only
                 const medications = cleanedProducts.filter(p => p.category === 'medication');
-               // if (medications.length > 0) {
+                if (medications.length > 0) {
                     const medWorksheet = XLSX.utils.json_to_sheet(medications);
                     XLSX.utils.book_append_sheet(workbook, medWorksheet, 'Medications');
-               // }
+                }
                 
                 // Add sheet for care products only
                 const careProducts = cleanedProducts.filter(p => p.category === 'care-products');
-                //if (careProducts.length > 0) {
+                if (careProducts.length > 0) {
                     const careWorksheet = XLSX.utils.json_to_sheet(careProducts);
                     XLSX.utils.book_append_sheet(workbook, careWorksheet, 'Care Products');
-               // }
+                }
                 
                 // Auto-size columns for all sheets
                 const wscols = [
