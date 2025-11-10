@@ -642,7 +642,7 @@ async function getCategories(browser) {
         // Wait for Cloudflare challenge
         await waitForCloudflare(page);
         
-        await delay(3000);
+        await delay(1000);
         
         const html = await page.content();
         
