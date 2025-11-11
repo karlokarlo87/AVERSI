@@ -360,7 +360,7 @@ async function scrapeNewSiteMatIDs(browser, matIDs) {
             // Wait for Cloudflare challenge
             await waitForCloudflare(page);
             
-            await delay(2000); // Longer delay for Cloudflare
+            await delay(3000); // Longer delay for Cloudflare
             
             const html = await page.content();
             
@@ -520,7 +520,7 @@ async function downloadPageHTML(browser, category, pageNum, perpage = 192) {
         // Wait for Cloudflare challenge
         await waitForCloudflare(page);
         
-        await delay(2000);
+        await delay(3000);
         
         const html = await page.content();
         
@@ -642,7 +642,7 @@ async function getCategories(browser) {
         // Wait for Cloudflare challenge
         await waitForCloudflare(page);
         
-        await delay(1000);
+        await delay(3000);
         
         const html = await page.content();
         
