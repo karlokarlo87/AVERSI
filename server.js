@@ -38,9 +38,35 @@ const OLD_SITE_MATIDS = [
     // Original confirmed old site MatIDs
     90414, 36365, 77087, 138462, 9321, 28558, 79097, 999, 469, 15222,
     42353, 6669, 2807, 36357, 36356, 292, 125745, 86380, 80616,
-    82920, 135757, 134837, 4628, 29687, 22836, 148602, 50631, 80568, 72737
+    82920, 135757, 134837, 4628, 29687, 22836, 148602, 50631, 80568, 72737,142489,
+    28574,89398,7778,130855
 ];
 
+async function getAldDatafromJson(json) {
+        const jsonPath = path.join(__dirname, 'public', 'data', 'aversi_products.json');
+        if (fs.existsSync(jsonPath)) {
+             const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+                     // Merge existing and new products
+            const allProductsCombined = [...data, ...json];
+            console.log(`📊 Total products before deduplication: ${allProductsCombined.length}`);
+            
+            // Remove duplicates based on productCode (keep the latest/newest entry)
+            const uniqueProductsMap = new Map();
+            
+            allProductsCombined.forEach(product => {
+                const key = product.productCode;
+                if (key && key.trim() !== '') {
+                    // If product already exists, keep the newer one (or override with new data)
+                    uniqueProductsMap.set(key, product);
+                }
+            });
+            
+            // Convert Map back to array
+            const uniqueProducts = Array.from(uniqueProductsMap.values());
+            return uniqueProducts;
+        }
+        else return json;
+}
 // Helper function to detect and wait for Cloudflare challenge
 async function waitForCloudflare(page) {
     try {
@@ -145,7 +171,7 @@ async function parseOldSiteMatID(filename, matID) {
             return null;
         }
       
-        const title = $('.product-title').text().trim() || '';
+        const title = $('.product-summary .product-title').text().trim() || '';
         const priceOldRaw = $('.price del').text().trim() || '';
         const priceRaw = $('.price .amount.text-theme-colored').text().trim() || '';
         
@@ -388,7 +414,7 @@ async function scrapeNewSiteMatIDs(browser, matIDs) {
             
             // Clean up
             try {
-                fs.unlinkSync(filename);
+               fs.unlinkSync(filename);
             } catch (e) {}
             
         } catch (error) {
@@ -436,7 +462,7 @@ async function getRandomNumber(browser) {
         3718, 8356, 71104, 11267, 126930, 80636,
         96760, 23848, 17152, 86364, 86363, 96475, 130115, 89377, 26984,
         74264, 6932, 90846, 82865, 82091, 72222, 51799, 38642, 97178,
-        97179, 86381, 97180, 37399, 78125, 74768, 143132,661,1466
+        97179, 86381, 97180, 37399, 78125, 74768, 143132,661,1466,82756
     ];
 
     // Total MatIDs = OLD_SITE_MATIDS + numbers
@@ -668,8 +694,13 @@ async function getCategories(browser) {
                
                 if (match && match[1]) {
                     if(href.includes('medication')){
-                        if(href !== "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/pressure-regulators/")
+                        
+
+                        if (href.includes("for-cardiovascular-diseases")) {
+                        console.log("✅ URL contains 'for-cardiovascular-diseases'");
+                        } else {
                         categories.push({category:href,startPage: 1, endPage: 50, perpage: 192,pages:50});
+                        }
                     }
                 }
             }
@@ -679,7 +710,7 @@ async function getCategories(browser) {
  
         categories.push({category: 'https://shop.aversi.ge/ka/medication/მედიკამენტები-სხვადასხვა/', startPage: 1, endPage: 12, perpage: 192,pages:12});
         categories.push({category: 'https://shop.aversi.ge/ka/medication/homeopathic-remedies/', startPage: 1, endPage: 12, perpage: 192,pages:12});
-        categories.push({category: 'https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/pressure-regulators/', startPage: 1, endPage: 20, perpage: 24,pages:20});
+        categories.push({category: 'https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/', startPage: 1, endPage: 40, perpage: 24,pages:40});
         categories.push({category: 'https://shop.aversi.ge/ka/medication/various-medicinal-products/', startPage: 1, endPage: 12, perpage: 192,pages:12});
         categories.push({category: 'https://shop.aversi.ge/ka/care-products/child-care/child-care-hygiene-products/', startPage: 1, endPage: 12, perpage: 192,pages:12});
         categories.push({category: 'https://shop.aversi.ge/ka/care-products/oral-care/', startPage: 1, endPage: 12, perpage: 192,pages:12});
@@ -811,12 +842,12 @@ async function scrapeAllCategories(browser, categories) {
     }
     
     await browser.close();
-    
+    const getalddata = await getAldDatafromJson(allProducts);
     scrapingStatus.endTime = Date.now();
     scrapingStatus.isRunning = false;
     scrapingStatus.progress = 100;
     
-    return { allProducts, successfulPages, failedPages, totalPages: totalPagesScraped };
+    return { allProducts, successfulPages, failedPages, totalPages: totalPagesScraped,getalddata };
 }
 
 // Routes
@@ -872,11 +903,11 @@ app.get('/aversi', async (req, res) => {
         });
         
         // Run scraping asynchronously
-        scrapeAllCategories(browser, categories).then(({ allProducts, successfulPages, failedPages, totalPages }) => {
+        scrapeAllCategories(browser, categories).then(({ allProducts, successfulPages, failedPages, totalPages, getalddata}) => {
             const duration = ((scrapingStatus.endTime - scrapingStatus.startTime) / 1000 / 60).toFixed(2);
             
-            if (allProducts.length > 0) {
-                const cleanedProducts = allProducts.map(product => ({
+            if (getalddata.length > 0) {
+                const cleanedProducts = getalddata.map(product => ({
                     ...product,
                     title: cleanText(product.title),
                     productCode: cleanText(product.productCode),

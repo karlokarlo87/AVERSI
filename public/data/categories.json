@@ -371,76 +371,6 @@
     "pages": 50
   },
   {
-    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/ანგიოტენზინზე/",
-    "startPage": 1,
-    "endPage": 50,
-    "perpage": 192,
-    "pages": 50
-  },
-  {
-    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/for-arrhythmia/",
-    "startPage": 1,
-    "endPage": 50,
-    "perpage": 192,
-    "pages": 50
-  },
-  {
-    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/for-angina/",
-    "startPage": 1,
-    "endPage": 50,
-    "perpage": 192,
-    "pages": 50
-  },
-  {
-    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/cholesterol-regulating-agents/",
-    "startPage": 1,
-    "endPage": 50,
-    "perpage": 192,
-    "pages": 50
-  },
-  {
-    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/diuretic-medications/",
-    "startPage": 1,
-    "endPage": 50,
-    "perpage": 192,
-    "pages": 50
-  },
-  {
-    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/calcium-channel-antagonists/",
-    "startPage": 1,
-    "endPage": 50,
-    "perpage": 192,
-    "pages": 50
-  },
-  {
-    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/peripheral-vasodilators/",
-    "startPage": 1,
-    "endPage": 50,
-    "perpage": 192,
-    "pages": 50
-  },
-  {
-    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/agents-for-improving-the-peripheral-blood-flow/",
-    "startPage": 1,
-    "endPage": 50,
-    "perpage": 192,
-    "pages": 50
-  },
-  {
-    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/medications-for-platelet-aggregation-blood-coagulation-and-fibrinolysis/",
-    "startPage": 1,
-    "endPage": 50,
-    "perpage": 192,
-    "pages": 50
-  },
-  {
-    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/other-remedies-for-the-cardiovascular-system/",
-    "startPage": 1,
-    "endPage": 50,
-    "perpage": 192,
-    "pages": 50
-  },
-  {
     "category": "https://shop.aversi.ge/ka/medication/for-urogenital-system-diseases/for-prostate-hyperplasia/",
     "startPage": 1,
     "endPage": 50,
@@ -742,11 +672,11 @@
     "pages": 12
   },
   {
-    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/pressure-regulators/",
+    "category": "https://shop.aversi.ge/ka/medication/for-cardiovascular-diseases/",
     "startPage": 1,
-    "endPage": 20,
+    "endPage": 40,
     "perpage": 24,
-    "pages": 20
+    "pages": 40
   },
   {
     "category": "https://shop.aversi.ge/ka/medication/various-medicinal-products/",
