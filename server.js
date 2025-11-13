@@ -489,7 +489,7 @@ async function getRandomNumber(browser) {
        // const newSiteProducts = await scrapeNewSiteMatIDs(browser, numbers);
        // allProducts.push(...newSiteProducts);
     }
-console.log(123456);console.log(farmIDCategories);
+    console.log(farmIDCategories);
     // Scrape NEW SITE MatIDs separately (from numbers array)
     if (Object.keys(farmIDCategories).length > 0) {
         const newfarmidsProducts = await scrapeCategoriesByFarmID(browser, farmIDCategories);
@@ -755,6 +755,7 @@ async function scrapeAllCategories(browser, categories) {
     scrapingStatus.medicationProducts = 0;
     scrapingStatus.careProducts = 0;
     scrapingStatus.progress = 0;
+    scrapingStatus.stopRequested = false;
     
     const allProducts = [];
     let successfulPages = 0;
